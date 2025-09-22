@@ -1,6 +1,7 @@
 <?php
 session_start();
 include 'db_connect.php';
+include 'get_week_dates.php'; // Inclure le helper pour les dates
 
 if (!isset($_SESSION['teacher_id'])) {
     header("Location: index.php");
@@ -14,7 +15,9 @@ if (!isset($_GET['session_id']) || !is_numeric($_GET['session_id'])) {
 
 $session_id = (int)$_GET['session_id'];
 
-// --- NOUVELLE LOGIQUE DE VÉRIFICATION DE DATE ET DE PRÉ-REMPLISSAGE ---
+// --- LOGIQUE DE PRÉ-REMPLISSAGE CORRIGÉE ---
+
+// 1. Récupérer les informations de la session, y compris le jour de la semaine
 $session_query = $conn->prepare("
     SELECT tt.group_id, tt.start_time, tt.end_time, tt.day_of_week, m.module_name, c.class_name, g.group_name
     FROM timetable tt
@@ -32,30 +35,27 @@ if ($session_result->num_rows === 0) {
 }
 $session = $session_result->fetch_assoc();
 $group_id = $session['group_id'];
+$day_of_week = $session['day_of_week']; // Ex: 'Lundi'
 
-// Vérifier si la session est pour aujourd'hui
-$days_map = ['Monday' => 1, 'Tuesday' => 2, 'Wednesday' => 3, 'Thursday' => 4, 'Friday' => 5, 'Saturday' => 6, 'Sunday' => 7];
-$session_day_numeric = $days_map[$session['day_of_week']];
-$current_day_numeric = date('N'); // ISO-8601 numeric representation of the day of the week
-$is_session_today = ($session_day_numeric == $current_day_numeric);
+// 2. Déterminer la date exacte de la séance pour la semaine en cours
+$attendance_date_for_query = getDateForDayOfWeek($day_of_week);
 
-// Récupérer les absences déjà enregistrées pour aujourd'hui
+// 3. Récupérer les présences déjà enregistrées pour CETTE séance à CETTE date précise
 $existing_attendance = [];
-if ($is_session_today) {
-    $today = date('Y-m-d');
-    $attendance_query = $conn->prepare("
-        SELECT student_id, attendance_period, status 
-        FROM attendance 
-        WHERE timetable_id = ? AND attendance_date = ?
-    ");
-    $attendance_query->bind_param("is", $session_id, $today);
-    $attendance_query->execute();
-    $attendance_result = $attendance_query->get_result();
-    while ($row = $attendance_result->fetch_assoc()) {
-        $existing_attendance[$row['student_id']][$row['attendance_period']] = $row['status'];
-    }
+$attendance_query = $conn->prepare("
+    SELECT student_id, attendance_period, status 
+    FROM attendance 
+    WHERE original_timetable_id = ? AND attendance_date = ?
+");
+$attendance_query->bind_param("is", $session_id, $attendance_date_for_query);
+$attendance_query->execute();
+$attendance_result = $attendance_query->get_result();
+while ($row = $attendance_result->fetch_assoc()) {
+    $existing_attendance[$row['student_id']][$row['attendance_period']] = $row['status'];
 }
-// --- FIN DE LA NOUVELLE LOGIQUE ---
+$attendance_query->close();
+
+// --- FIN DE LA LOGIQUE DE PRÉ-REMPLISSAGE ---
 
 $students_query = $conn->prepare("SELECT student_id, first_name, last_name FROM students WHERE group_id = ? ORDER BY last_name, first_name");
 $students_query->bind_param("i", $group_id);
@@ -164,10 +164,7 @@ function getInitials($firstName, $lastName) {
             transition: background-color 0.2s;
         }
         .btn-submit:hover { background-color: #00417a; }
-        .btn-submit:disabled {
-            background-color: #ccc;
-            cursor: not-allowed;
-        }
+        
     </style>
 </head>
 <body>
@@ -183,9 +180,7 @@ function getInitials($firstName, $lastName) {
         <div class="page-header">
             <h1><?php echo htmlspecialchars($session['module_name']); ?></h1>
             <p><?php echo htmlspecialchars($session['class_name'] . ' - ' . $session['group_name']); ?> | <?php echo date('H:i', strtotime($session['start_time'])) . ' - ' . date('H:i', strtotime($session['end_time'])); ?></p>
-            <?php if (!$is_session_today): ?>
-                <p style="color: var(--danger-color); font-weight: bold;">L'appel pour cette séance ne peut être fait qu'un <?php echo $session['day_of_week']; ?>.</p>
-            <?php endif; ?>
+            
         </div>
 
         <form action="process_attendance.php" method="post">
@@ -210,21 +205,21 @@ function getInitials($firstName, $lastName) {
                         
                         <!-- Période 1 -->
                         <div class="period-controls">
-                            <button type="button" class="btn-attendance-circle btn-present <?php echo $status_p1 === 'Present' ? 'active' : ''; ?>" <?php if (!$is_session_today) echo 'disabled'; ?>>P</button>
-                            <button type="button" class="btn-attendance-circle btn-absent <?php echo $status_p1 === 'Absent' ? 'active' : ''; ?>" <?php if (!$is_session_today) echo 'disabled'; ?>>A</button>
+                            <button type="button" class="btn-attendance-circle btn-present <?php echo $status_p1 === 'Present' ? 'active' : ''; ?>">P</button>
+                            <button type="button" class="btn-attendance-circle btn-absent <?php echo $status_p1 === 'Absent' ? 'active' : ''; ?>">A</button>
                             <input type="hidden" class="attendance-input" name="attendance[<?php echo $student_id; ?>][1]" value="<?php echo $status_p1; ?>">
                         </div>
                         <!-- Période 2 -->
                         <div class="period-controls">
-                            <button type="button" class="btn-attendance-circle btn-present <?php echo $status_p2 === 'Present' ? 'active' : ''; ?>" <?php if (!$is_session_today) echo 'disabled'; ?>>P</button>
-                            <button type="button" class="btn-attendance-circle btn-absent <?php echo $status_p2 === 'Absent' ? 'active' : ''; ?>" <?php if (!$is_session_today) echo 'disabled'; ?>>A</button>
+                            <button type="button" class="btn-attendance-circle btn-present <?php echo $status_p2 === 'Present' ? 'active' : ''; ?>">P</button>
+                            <button type="button" class="btn-attendance-circle btn-absent <?php echo $status_p2 === 'Absent' ? 'active' : ''; ?>">A</button>
                             <input type="hidden" class="attendance-input" name="attendance[<?php echo $student_id; ?>][2]" value="<?php echo $status_p2; ?>">
                         </div>
                     </div>
                 <?php endwhile; ?>
             </div>
             <div class="form-actions">
-                <button type="submit" class="btn-submit" <?php if (!$is_session_today) echo 'disabled'; ?>><i class="fas fa-check"></i> Enregistrer l'Appel</button>
+                <button type="submit" class="btn-submit"><i class="fas fa-check"></i> Enregistrer l'Appel</button>
             </div>
         </form>
     </main>

@@ -46,3 +46,6 @@ deux colonnes base de donnees
 modification dabsence 
 
 dans la base de donnes est ce que quand on va modifie un module les absences de les etudiant va supprime ?
+
+
+ajouter certifie ou pas 

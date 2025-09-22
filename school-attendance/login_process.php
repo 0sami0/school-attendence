@@ -5,40 +5,45 @@ include 'db_connect.php';
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $email = $_POST['email'];
     $password = $_POST['password'];
-    $_SESSION['role'] = $user['role'];
 
-    $sql = "SELECT teacher_id, first_name, password, role FROM teachers WHERE email = ?";
-    $stmt = mysqli_prepare($conn, $sql);
+    // 1. Essayer de se connecter en tant que professeur/admin
+    $stmt = $conn->prepare("SELECT teacher_id, first_name, password, role FROM teachers WHERE email = ?");
+    $stmt->bind_param("s", $email);
+    $stmt->execute();
+    $result = $stmt->get_result();
 
-    if ($stmt) {
-        mysqli_stmt_bind_param($stmt, "s", $email);
-        mysqli_stmt_execute($stmt);
-        $result = mysqli_stmt_get_result($stmt);
-
-        if (mysqli_num_rows($result) == 1) {
-            $user = mysqli_fetch_assoc($result);
-
-            if (password_verify($password, $user['password'])) {
-                $_SESSION['teacher_id'] = $user['teacher_id'];
-                $_SESSION['teacher_name'] = $user['first_name'];
-                $_SESSION['role'] = $user['role'];
-                header("Location: dashboard.php");
-                exit();
-            } else {
-                // Mot de passe incorrect
-                header("Location: index.php?error=Email ou mot de passe incorrect");
-                exit();
-            }
-        } else {
-            // Utilisateur non trouvé
-            header("Location: index.php?error=Email ou mot de passe incorrect");
+    if ($result->num_rows === 1) {
+        $user = $result->fetch_assoc();
+        if (password_verify($password, $user['password'])) {
+            // Connexion réussie en tant que professeur/admin
+            $_SESSION['teacher_id'] = $user['teacher_id'];
+            $_SESSION['teacher_name'] = $user['first_name'];
+            $_SESSION['role'] = $user['role'];
+            header("Location: dashboard.php"); // Redirige vers le tableau de bord admin/prof
             exit();
         }
-        mysqli_stmt_close($stmt);
     }
-    mysqli_close($conn);
-} else {
-    header("Location: index.php");
+    
+    // 2. Si ce n'est pas un professeur, essayer en tant qu'étudiant
+    $stmt = $conn->prepare("SELECT student_id, first_name, password FROM students WHERE student_email = ?");
+    $stmt->bind_param("s", $email);
+    $stmt->execute();
+    $result = $stmt->get_result();
+
+    if ($result->num_rows === 1) {
+        $user = $result->fetch_assoc();
+        if (password_verify($password, $user['password'])) {
+            // Connexion réussie en tant qu'étudiant
+            $_SESSION['student_id'] = $user['student_id'];
+            $_SESSION['student_name'] = $user['first_name'];
+            $_SESSION['role'] = 'student'; // Rôle crucial pour la redirection
+            header("Location: student_dashboard.php"); // Redirige vers le NOUVEAU tableau de bord étudiant
+            exit();
+        }
+    }
+
+    // 3. Si aucune connexion n'a réussi
+    header("Location: index.php?error=invalid_credentials");
     exit();
 }
 ?>
