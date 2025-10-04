@@ -1,0 +1,51 @@
+
+
+les probleme 
+
+dans la page de getion des filiere et groupes, la button de supprime fonctionne pas 
+la meme chose dans la supprime d au etudiant 
+
+review prof et admin sur l application
+
+bleu  224.3 76.3% 48%
+
+affiche les tableau de base donnesdans l interface graphique 
+
+probleme de modification d abscence
+
+
+la date de correction d abscence juste jusqu a aujourd hui 
+l appel fait par date et dans le rapprt s affiche par la date et filtre par date 
+
+
+
+
+Fichiers Principaux
+
+index.php
+dashboard.php
+db_connect.php
+Fichiers de la Vue Professeur
+
+teacher_view.php
+select_correction.php
+edit_attendance.php
+Fichiers de la Vue Administrateur
+
+report.php
+manage_classes.php
+modules.php
+manage_teachers.php
+students.php
+timetable.php
+
+
+
+system crud Pour emploi du temps 
+deux colonnes base de donnees 
+modification dabsence 
+
+dans la base de donnes est ce que quand on va modifie un module les absences de les etudiant va supprime ?
+
+
+ajouter certifie ou pas 
